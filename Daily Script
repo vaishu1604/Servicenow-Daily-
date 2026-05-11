@@ -1,0 +1,20 @@
+//Find active incident created in lat 30 days assignment group empty and state is inprogess 
+
+
+
+// Find active incidents created in last 30 days
+// where Assignment Group is empty
+// and State is In Progress
+
+var gr = new GlideRecord('incident');
+
+gr.addQuery('active', true);
+gr.addQuery('sys_created_on', '>=', gs.daysAgoStart(30));
+gr.addNullQuery('assignment_group');
+gr.addQuery('state', 2);
+
+gr.query();
+
+while (gr.next()) {
+    gs.print('Incident: ' + gr.number);
+}
