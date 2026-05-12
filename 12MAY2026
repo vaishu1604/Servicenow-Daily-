@@ -1,0 +1,30 @@
+// Delete resolved incidents created in last 30 days
+// where short description contains "issues"
+
+var gr = new GlideRecord('incident');
+
+gr.addQuery('short_description', 'CONTAINS', 'issues');
+gr.addQuery('sys_created_on', '>=', gs.daysAgoStart(30));
+gr.addQuery('state', 6); // Resolved
+
+gr.query();
+
+gs.print('Records found: ' + gr.getRowCount());
+
+gr.deleteMultiple();
+
+gs.print('Delete successful');
+
+
+//Advanced version 
+
+var gr = new GlideRecord('incident');
+gr.addQuery('short_description', 'CONTAINS', 'issues');
+gr.addQuery('sys_created_on', '>=', gs.daysAgoStart(30));
+gr.addQuery('state', 6);
+gr.setLimit(100);
+gr.query();
+var count = gr.getRowCount();
+gs.print('Deleting records: ' + count);
+gr.deleteMultiple();
+gs.print('Completed');
