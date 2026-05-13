@@ -1,0 +1,38 @@
+//A company wants to identify VIP users generating unusually high incident volume.
+//Write a Background Script that: Finds all active incidents created in last 30 days Group records by caller_id 
+//Count number of incidents per caller If caller created more than 5 incidents:
+//Print: User name Email Total incident count Ignore users where: User is inactive Email is empty
+
+var ga = new GlideAggregate('incident');
+
+ga.addActiveQuery();
+ga.addQuery('sys_created_on', '>=', gs.daysAgoStart(30));
+
+ga.groupBy('caller_id');
+ga.addAggregate('COUNT');
+
+ga.query();
+
+while (ga.next()) {
+
+    var count = ga.getAggregate('COUNT');
+
+    if (count > 5 && ga.caller_id) {
+
+        var userGR = ga.caller_id.getRefRecord();
+
+        // Ignore inactive users
+        if (!userGR.active)
+            continue;
+
+        // Ignore empty email
+        if (gs.nil(userGR.email))
+            continue;
+
+        gs.print(
+            'User: ' + userGR.name +
+            ' | Email: ' + userGR.email +
+            ' | Incident Count: ' + count
+        );
+    }
+}
