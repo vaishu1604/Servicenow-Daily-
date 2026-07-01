@@ -1,0 +1,33 @@
+//When all child incidents are Closed, automatically close the parent incident.
+//Table: Incident
+//When: After Update
+//Condition:
+
+//State changes to Closed
+//Parent is not empty
+
+
+(function executeRule(current, previous) {
+
+    if (current.parent.nil()) {
+        return;
+    }
+
+    // Check if any child incidents are still not closed
+    var gr = new GlideRecord('incident');
+    gr.addQuery('parent', current.parent);
+    gr.addQuery('state', '!=', 7); // 7 = Closed
+    gr.query();
+
+    // If no active child exists, close parent
+    if (!gr.hasNext()) {
+
+        var parent = new GlideRecord('incident');
+        if (parent.get(current.parent)) {
+            parent.state = 7;
+            parent.close_notes = 'Automatically closed because all child incidents are closed.';
+            parent.update();
+        }
+    }
+
+})(current, previous);
