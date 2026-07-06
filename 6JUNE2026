@@ -1,0 +1,13 @@
+//high priority case unassign to 30 min then assign to exceletion group 
+
+var gr = new GlideRecord('sn_customerservice_case');
+gr.addActiveQuery();
+gr.addQuery('priority', 1); // High
+gr.addNullQuery('assigned_to'); // Unassigned
+gr.addQuery('sys_created_on', '<=', gs.minutesAgoStart(30));
+gr.query();
+
+while (gr.next()) {
+    gr.setValue('assignment_group', 'ESCALATION_GROUP_SYS_ID');
+    gr.update();
+}
