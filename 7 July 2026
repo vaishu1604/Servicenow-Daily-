@@ -1,0 +1,187 @@
+// 1 . Close Parent Incident Only When All Child Incidents Are Closed 
+Requirement
+Whenever a child Incident is closed, check if all child incidents of the parent are closed.
+If yes → Close the parent.
+Otherwise → Do nothing.
+
+
+(function executeRule(current, previous) {
+
+    if (current.parent.nil()) {
+        return;
+    }
+
+    var gr = new GlideRecord('incident');
+    gr.addActiveQuery();
+    gr.addQuery('parent', current.parent);
+    gr.query();
+
+    if (!gr.next()) {
+
+        var grt = new GlideRecord('incident');
+
+        if (grt.get(current.parent)) {
+
+            grt.state = 7;
+            grt.close_notes = "All child incidents are closed.";
+            grt.update();
+
+        }
+    }
+
+})(current, previous);
+
+
+
+
+
+
+
+// 2. Prevent Parent Incident from Closing Until All Children Are Closed 
+Requirement
+User tries to close Parent Incident.
+If any child Incident is still Active
+→ Prevent save
+→ Show error message.
+
+
+
+(function executeRule(current, previous) {
+
+    if (current.state.changesTo(7)) {
+
+        var gr = new GlideRecord('incident');
+        gr.addActiveQuery();
+        gr.addQuery('parent', current.sys_id);
+        gr.query();
+
+        if (gr.hasNext()) {
+
+            gs.addErrorMessage("Active child incidents exist. Close them first.");
+            current.setAbortAction(true);
+
+        }
+    }
+
+})(current, previous);
+
+
+
+
+
+
+
+
+
+// 3. Auto Close Related Problem Tasks When Problem is Closed 
+Requirement
+Whenever a Problem record is Closed
+Automatically close all active Problem Tasks.
+
+
+
+
+
+
+(function executeRule(current, previous) {
+
+    if (current.state.changesTo(3)) {
+
+        var gr = new GlideRecord('problem_task');
+        gr.addActiveQuery();
+        gr.addQuery('problem', current.sys_id);
+        gr.query();
+
+        while (gr.next()) {
+
+            gr.state = 3;
+            gr.close_notes = "All related Problem Tasks closed.";
+            gr.update();
+
+        }
+    }
+
+})(current, previous);
+
+
+
+
+// 4.Prevent Duplicate Active Incident
+Requirement
+While creating an Incident,
+If same Caller + Short Description already has an Active Incident
+
+
+
+var gr = new GlideRecord('incident');
+gr.addActiveQuery();
+gr.addQuery('caller_id', current.caller_id);
+gr.addQuery('short_description', current.short_description);
+gr.setLimit(1);
+gr.query();
+
+if (gr.hasNext()) {
+    gs.addErrorMessage("Duplicate active Incident found.");
+    current.setAbortAction(true);
+}
+
+
+
+
+
+
+
+// 5. Auto Assign Incident Based on Least Workload
+Requirement
+When Incident is created,
+Find all users in Assignment Group.
+Assign the Incident to the user having the minimum number of active incidents.
+
+
+
+
+
+(function executeRule(current, previous) {
+
+    // If Assignment Group is empty, do nothing
+    if (current.assignment_group.nil()) {
+        return;
+    }
+
+    var leastLoadedUser = '';
+    var minCount = 999999;
+
+    // Get all users in the Assignment Group
+    var memberGR = new GlideRecord('sys_user_grmember');
+    memberGR.addQuery('group', current.assignment_group);
+    memberGR.query();
+
+    while (memberGR.next()) {
+
+        var count = 0;
+
+        // Count active incidents assigned to this user
+        var ga = new GlideAggregate('incident');
+        ga.addActiveQuery();
+        ga.addQuery('assigned_to', memberGR.user);
+        ga.addAggregate('COUNT');
+        ga.query();
+
+        if (ga.next()) {
+            count = parseInt(ga.getAggregate('COUNT'), 10);
+        }
+
+        // Find user with minimum workload
+        if (count < minCount) {
+            minCount = count;
+            leastLoadedUser = memberGR.user.toString();
+        }
+    }
+
+    // Assign incident
+    if (leastLoadedUser) {
+        current.assigned_to = leastLoadedUser;
+    }
+
+})(current, previous);
+
