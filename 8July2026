@@ -1,0 +1,69 @@
+// 1. Whenever an Incident is updated:
+If the Priority changes to Critical (1):
+Set Impact = 1 (High)
+Set Urgency = 1 (High)
+Add a work note:
+
+
+ Priority changed to Critical automatically. Please investigate immediately.
+
+
+
+function executeRule(current, previous) {
+
+    if (current.priority.changesTo(1)) {
+
+        current.impact = 1;
+        current.urgency = 1;
+        current.work_notes = 'Priority changed to Critical automatically. Please investigate immediately';
+
+    }
+
+})(current, previous);
+
+
+
+
+
+
+
+// 2. Create a Scheduled Job that runs every day at 9:00 AM.
+The script should:
+Find all Incidents
+Active = true
+State is not Closed or Canceled
+Opened more than 7 days ago
+For each matching Incident:
+Increase a custom integer field u_follow_up_count by 1.
+Add a work note:
+
+
+ Daily follow-up reminder generated automatically.
+var groupGR = new GlideRecord('sys_user_group');
+groupGR.addQuery('name', 'Service Desk');
+groupGR.query();
+
+var groupSysId = '';
+
+if (groupGR.next()) {
+    groupSysId = groupGR.getUniqueValue();
+}
+
+var gr = new GlideRecord('incident');
+gr.addActiveQuery();
+gr.addQuery('state', 'NOT IN', '7,8');
+gr.addQuery('opened_at', '<=', gs.daysAgoStart(7));
+gr.query();
+
+while (gr.next()) {
+
+    gr.u_follow_up_count = (parseInt(gr.u_follow_up_count, 10) || 0) + 1;
+    gr.work_notes = "Daily follow-up reminder generated automatically.";
+
+    if (gr.u_follow_up_count == 3 && groupSysId) {
+        gr.assignment_group = groupSysId;
+    }
+
+    gr.update();
+}
+
