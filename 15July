@@ -1,0 +1,127 @@
+Q1. Business Rule (Before Update)
+When an Incident priority changes to Critical (1):
+If Assignment Group is empty, set it to Network.
+Add a work note:
+
+
+ Priority automatically changed to Critical.
+
+
+
+Do not run if the priority was already Critical.
+
+
+
+
+
+
+(function executeRule(current, previous) {
+
+    if (current.priority.changesTo(1)) {
+
+        if (current.assignment_group.nil()) {
+
+            current.assignment_group = "<Network Sys ID>";
+        }
+
+        current.work_notes = "Priority automatically changed to Critical.";
+
+    }
+
+})(current, previous);
+
+
+
+
+Q2. Scheduled Script Execution
+Run every night.
+Find all active Incidents where:
+State is On Hold
+Last Updated is more than 5 days ago
+For each record:
+Add a work note:
+
+
+ Auto reminder: Incident has been on hold for more than 5 days.
+
+
+
+Increment custom field u_reminder_count.
+If reminder count becomes 3, change state to In Progress.
+
+
+
+
+
+
+
+
+var gr = new GlideRecord("incident");
+
+gr.addActiveQuery();
+gr.addQuery("state", 3);
+gr.addQuery("sys_updated_on", "<=", gs.daysAgoStart(5));
+
+gr.query();
+
+while (gr.next()) {
+
+    gr.work_notes =
+        "Auto reminder: Incident has been on hold for more than 5 days.";
+
+    gr.u_reminder_count =
+        parseInt(gr.u_reminder_count) + 1;
+
+    if (gr.u_reminder_count == 3) {
+
+        gr.state = 2;
+
+    }
+
+    gr.update();
+
+}
+
+
+
+
+
+
+
+Q3. Script Include
+Create a Script Include named IncidentUtils.
+Method:
+isVIPIncident(incidentSysId)
+Requirement:
+Accept Incident sys_id.
+Return true if Caller is VIP.
+Otherwise return false.
+
+
+
+var IncidentUtils = Class.create();
+
+IncidentUtils.prototype = {
+
+    initialize: function() {
+
+    },
+
+    isVIPIncident: function(incidentSysId) {
+
+        var gr = new GlideRecord("incident");
+
+        if (gr.get(incidentSysId)) {
+
+            return gr.caller_id.vip == true;
+
+        }
+
+        return false;
+
+    },
+
+    type: "IncidentUtils"
+
+};
+
