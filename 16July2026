@@ -1,0 +1,105 @@
+// Q Requirement
+When Category = Hardware
+Make Assignment Group mandatory.
+Show only Assignment Groups whose type is Hardware Support.
+Otherwise
+Remove mandatory.
+Remove the filter.
+
+
+function onChange(control, oldValue, newValue, isLoading, isTemplate) {
+
+    if (isLoading || newValue == '') {
+        return;
+    }
+
+    if (newValue == 'hardware') {
+
+        // Make Assignment Group mandatory
+        g_form.setMandatory('assignment_group', true);
+
+        // Filter Assignment Group
+        g_form.setQuery(
+            'assignment_group',
+            'type=Hardware Support'
+        );
+
+    } else {
+
+        // Remove mandatory
+        g_form.setMandatory('assignment_group', false);
+
+        // Remove filter
+        g_form.setQuery('assignment_group', '');
+
+    }
+
+}
+
+
+// Q. Business Rule (After Update)
+Requirement
+Whenever Assignment Group changes:
+Create a record in u_assignment_history
+Store:
+Incident
+Previous Assignment Group
+New Assignment Group
+Changed By
+Changed On
+
+
+
+(function executeRule(current, previous) {
+
+    if (!current.assignment_group.changes()) {
+        return;
+    }
+
+    var historyGR = new GlideRecord('u_assignment_history');
+    historyGR.initialize();
+
+    historyGR.u_incident = current.sys_id;
+    historyGR.u_previous_assignment_group = previous.assignment_group;
+    historyGR.u_new_assignment_group = current.assignment_group;
+    historyGR.u_changed_by = gs.getUserID();
+    historyGR.u_changed_on = gs.nowDateTime();
+
+    historyGR.insert();
+
+})(current, previous);
+
+
+
+// Q. Fix Script
+Update all Incidents where:
+Category = Network
+Priority = 2
+Set
+Impact = 1
+Urgency = 2
+Print total updated records.
+
+
+
+var count = 0;
+
+var gr = new GlideRecord("incident");
+
+gr.addQuery("category", "network");
+gr.addQuery("priority", 2);
+
+gr.query();
+
+while (gr.next()) {
+
+    gr.impact = 1;
+    gr.urgency = 2;
+
+    gr.update();
+
+    count++;
+
+}
+
+gs.print("Updated : " + count);
