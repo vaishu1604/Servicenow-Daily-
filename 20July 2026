@@ -1,0 +1,276 @@
+1. Business Rule (Before Update)
+Requirement
+When an Incident Priority changes to Critical (1), automatically assign it to Network Team only if Assignment Group is empty.
+Type
+Before Update Business Rule
+Script
+(function executeRule(current, previous) {
+
+    if (current.priority.changesTo('1')) {
+
+        if (current.assignment_group.nil()) {
+
+            current.assignment_group = 'NETWORK_TEAM_SYS_ID';
+
+        }
+    }
+
+})(current, previous);
+
+2. Script Include
+Requirement
+Return active incident count for a user.
+Method
+getActiveIncidentCount(userSysId)
+Script
+var IncidentUtils = Class.create();
+
+IncidentUtils.prototype = {
+
+    initialize: function() {
+    },
+
+    getActiveIncidentCount: function(userSysId) {
+
+        var gr = new GlideRecord('incident');
+
+        gr.addActiveQuery();
+        gr.addQuery('assigned_to', userSysId);
+        gr.query();
+
+        return gr.getRowCount();
+    },
+
+    type: 'IncidentUtils'
+};
+
+
+3. Background Script
+Requirement
+Update all active incidents older than 30 days.
+Set State = On Hold.
+Script
+var gr = new GlideRecord('incident');
+
+gr.addActiveQuery();
+
+gr.addQuery('sys_created_on', '<=', gs.daysAgoStart(30));
+
+gr.query();
+
+while (gr.next()) {
+
+    gr.setValue('state', 3);
+
+    gr.update();
+
+}
+
+gs.print("Completed");
+
+4. Scheduled Script Execution
+Requirement
+Every day at 8 AM
+Close incidents resolved more than 7 days ago.
+Schedule
+Daily
+8:00 AM
+Script
+var gr = new GlideRecord('incident');
+
+gr.addQuery('state', 6);
+
+gr.addQuery('resolved_at', '<=', gs.daysAgoStart(7));
+
+gr.query();
+
+while (gr.next()) {
+
+    gr.setValue('state', 7);
+
+    gr.update();
+
+}
+
+5. Client Script (onChange)
+Requirement
+When Category becomes Network
+Make CI mandatory
+Display Info Message
+Script
+function onChange(control, oldValue, newValue, isLoading) {
+
+    if (isLoading || newValue == '') {
+        return;
+    }
+
+    if (newValue == 'network') {
+
+        g_form.setMandatory('cmdb_ci', true);
+
+        g_form.addInfoMessage('Configuration Item is mandatory for Network category.');
+
+    } else {
+
+        g_form.setMandatory('cmdb_ci', false);
+
+    }
+}
+
+6. GlideAggregate
+Requirement
+Find caller with maximum active incidents.
+Script
+var ga = new GlideAggregate('incident');
+
+ga.addActiveQuery();
+
+ga.addAggregate('COUNT');
+
+ga.groupBy('caller_id');
+
+ga.orderByAggregateDesc('COUNT');
+
+ga.query();
+
+if (ga.next()) {
+
+    gs.print(
+        ga.caller_id.getDisplayValue() +
+        " : " +
+        ga.getAggregate('COUNT')
+    );
+
+}
+
+7. Business Rule
+Requirement
+Prevent duplicate active incidents.
+Criteria
+Same Caller
+Same Short Description
+Script
+(function executeRule(current, previous) {
+
+    if (current.caller_id.nil() || current.short_description.nil()) {
+        return;
+    }
+
+    var gr = new GlideRecord('incident');
+
+    gr.addActiveQuery();
+
+    gr.addQuery('caller_id', current.caller_id);
+
+    gr.addQuery('short_description', current.short_description);
+
+    gr.query();
+
+    if (gr.next()) {
+
+        gs.addErrorMessage('Active incident already exists.');
+
+        current.setAbortAction(true);
+
+    }
+
+})(current, previous);
+
+8. GlideAjax
+Requirement
+Return caller email when caller changes.
+
+Script Include
+var UserDetails = Class.create();
+
+UserDetails.prototype = Object.extendsObject(AbstractAjaxProcessor, {
+
+    getUserEmail: function() {
+
+        var userSysId = this.getParameter('sysparm_userSysId');
+
+        var gr = new GlideRecord('sys_user');
+
+        if (gr.get(userSysId)) {
+
+            return gr.getValue('email');
+
+        }
+
+        return '';
+
+    },
+
+    type: 'UserDetails'
+
+});
+(Client Callable = True)
+
+Client Script
+function onChange(control, oldValue, newValue, isLoading) {
+
+    if (isLoading || newValue == '')
+        return;
+
+    var ga = new GlideAjax('UserDetails');
+
+    ga.addParam('sysparm_name', 'getUserEmail');
+
+    ga.addParam('sysparm_userSysId', newValue);
+
+    ga.getXMLAnswer(function(response) {
+
+        g_form.addInfoMessage("Caller Email : " + response);
+
+    });
+
+}
+
+9. Background Script
+Requirement
+Update Impact = High
+When Priority = Critical
+Script
+var gr = new GlideRecord('incident');
+
+gr.addQuery('priority', '1');
+
+gr.query();
+
+while (gr.next()) {
+
+    gr.setValue('impact', '1');
+
+    gr.update();
+
+}
+
+10. Business Rule
+Requirement
+Whenever Assignment Group changes
+Add work notes
+Example
+Assignment Group changed from Service Desk to Network Team
+
+Changed By : System Administrator
+
+Date : 2026-07-20 10:30:45
+Script
+(function executeRule(current, previous) {
+
+    if (current.assignment_group.changes()) {
+
+        current.work_notes =
+            "Assignment Group changed from " +
+            previous.assignment_group.getDisplayValue() +
+            " to " +
+            current.assignment_group.getDisplayValue() +
+            "\nChanged By: " +
+            gs.getUserDisplayName() +
+            "\nDate: " +
+            gs.nowDateTime();
+
+    }
+
+})(current, previous);
+
