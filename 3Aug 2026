@@ -1,0 +1,114 @@
+//1. Do not allow an Incident to be Closed if there is any active Change Request related to it.
+Business Rule
+Table: Incident
+When: Before Update
+(function executeRule(current, previous) {
+
+    if (!current.state.changesTo(7)) // Closed
+        return;
+
+    var gr = new GlideRecord('change_request');
+    gr.addActiveQuery();
+    gr.addQuery('incident', current.sys_id);
+    gr.query();
+
+    if (gr.hasNext()) {
+        gs.addErrorMessage('Incident cannot be closed because there is an active related Change Request.');
+        current.setAbortAction(true);
+    }
+
+})(current, previous);
+
+//2. Assign Assignment Group based on Category and Subcategory
+Business Rule
+Table: Incident
+When: Before Insert
+(function executeRule(current, previous) {
+
+    if (current.category.nil() || current.subcategory.nil())
+        return;
+
+    if (current.category == 'network' && current.subcategory == 'dns') {
+
+        current.assignment_group = 'SYS_ID_OF_NETWORK_GROUP';
+
+    } else if (current.category == 'software' && current.subcategory == 'email') {
+
+        current.assignment_group = 'SYS_ID_OF_SOFTWARE_GROUP';
+
+    } else {
+
+        current.assignment_group = 'SYS_ID_OF_DEFAULT_GROUP';
+
+    }
+
+})(current, previous);
+
+
+//3. Resolve all active Child Incidents when Parent Incident is Resolved
+Business Rule
+Table: Incident
+When: After Update
+(function executeRule(current, previous) {
+
+    if (!current.state.changesTo(6))
+        return;
+
+    var gr = new GlideRecord('incident');
+    gr.addActiveQuery();
+    gr.addQuery('parent_incident', current.sys_id);
+    gr.query();
+
+    while (gr.next()) {
+
+        gr.state = 6;
+        gr.work_notes = 'Automatically resolved because the parent Incident was resolved.';
+        gr.update();
+
+    }
+
+})(current, previous);
+
+
+// 4. Prevent duplicate active Incidents
+Business Rule
+Table: Incident
+When: Before Insert
+(function executeRule(current, previous) {
+
+    if (current.caller_id.nil() || current.short_description.nil())
+        return;
+
+    var gr = new GlideRecord('incident');
+    gr.addActiveQuery();
+    gr.addQuery('caller_id', current.caller_id);
+    gr.addQuery('short_description', current.short_description);
+    gr.query();
+
+    if (gr.hasNext()) {
+
+        gs.addErrorMessage('An active Incident already exists for this Caller with the same Short Description.');
+        current.setAbortAction(true);
+
+    }
+
+})(current, previous);
+
+
+// 5. Scheduled Job - Close Resolved Incidents after 7 days
+Scheduled Script Execution
+Runs every day at 8:00 AM
+var gr = new GlideRecord('incident');
+gr.addQuery('state', 6);
+gr.addQuery('resolved_at', '<=', gs.daysAgoStart(7));
+gr.query();
+
+while (gr.next()) {
+
+    gr.state = 7;
+    gr.close_code = 'Closed/Resolved by Caller';
+    gr.close_notes = 'Automatically closed after remaining in Resolved state for more than 7 days.';
+    gr.update();
+
+}
+
