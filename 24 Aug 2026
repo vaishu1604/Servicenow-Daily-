@@ -1,0 +1,127 @@
+An Incident should not be closed if there is an active Change Request related to it whose state is New or Assess. 
+
+
+
+Before business rule 
+
+
+(function executeRule(current, previous) {
+
+    if (!current.state.changesTo('7')) {
+        return;
+    }
+
+    var changeGR = new GlideRecord('change_request');
+    changeGR.addQuery('parent', current.sys_id);
+    changeGR.addQuery('state', 'IN', '1,2');
+    changeGR.setLimit(1);
+    changeGR.query();
+
+    if (changeGR.next()) {
+        gs.addErrorMessage(
+            'Incident cannot be closed because a related Change Request is still in New or Assess state.'
+        );
+
+        current.setAbortAction(true);
+    }
+
+})(current, previous);
+
+
+
+
+
+2. Whenever an Incident's Assignment Group changes, you need to maintain an audit record in a custom table containing:
+Incident
+Previous Assignment Group
+New Assignment Group
+Changed By
+Changed Date
+How would you design this?
+
+
+Br -After update 
+
+(function executeRule(current, previous) {
+
+    if (!current.assignment_group.changes()) {
+        return;
+    }
+
+    var auditGR = new GlideRecord('u_incident_assignment_audit');
+
+    auditGR.initialize();
+    auditGR.u_incident = current.sys_id;
+    auditGR.u_previous_group = previous.assignment_group;
+    auditGR.u_new_group = current.assignment_group;
+    auditGR.u_changed_by = gs.getUserID();
+    auditGR.u_changed_date = gs.nowDateTime();
+
+    auditGR.insert();
+
+})(current, previous);
+
+
+
+3. You have a Catalog Item with a Requested For variable. When the user selects an employee, you need to automatically display their:
+Department
+Manager
+Location
+The information should be fetched dynamically without reloading the form.
+How would you implement this using Client Script + GlideAjax + Script Include?
+
+
+
+
+var EmployeeDetails = Class.create();
+EmployeeDetails.prototype = Object.extendsObject(AbstractAjaxProcessor, {
+
+    getDetails: function() {
+
+        var userID = this.getParameter('sysparm_user');
+
+        var result = {
+            department: '',
+            manager: '',
+            location: ''
+        };
+
+        var userGR = new GlideRecord('sys_user');
+
+        if (userGR.get(userID)) {
+
+            result.department = userGR.department.toString();
+            result.manager = userGR.manager.toString();
+            result.location = userGR.location.toString();
+        }
+
+        return JSON.stringify(result);
+    },
+
+    type: 'EmployeeDetails'
+});
+
+
+4 . A Business Rule is supposed to update related Incidents whenever a Problem record is updated.
+After deployment, users report that:
+Some Incidents are updated multiple times
+System performance has degraded
+Occasionally the update fails with a transaction timeout
+
+
+(function executeRule(current, previous) {
+
+    var incGR = new GlideRecord('incident');
+    incGR.addQuery('problem_id', current.sys_id);
+    incGR.query();
+
+    while (incGR.next()) {
+
+        incGR.setValue('work_notes',
+            'Related Problem has been updated.');
+
+        incGR.update();
+    }
+
+})(current, previous);
+
