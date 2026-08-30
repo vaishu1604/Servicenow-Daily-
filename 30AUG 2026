@@ -1,0 +1,90 @@
+// 1 . Write a script to find all active Incidents where priority = 1 and print the Incident number and caller's name.
+           
+
+var gr = new GlideRecord('incident');
+gr.addQuery('active', true);
+gr.addQuery('priority', 1);
+gr.query();
+
+while (gr.next()) {
+    gs.info('Incident: ' + gr.number +
+            ' | Caller: ' + gr.caller_id.getDisplayValue());
+}
+
+
+// 2 . Write a script to find the number of Incidents per Assignment Group for active Incidents.
+
+var ga = new GlideAggregate('incident');
+ga.addQuery('active', true);
+ga.addAggregate('COUNT');
+ga.groupBy('assignment_group');
+ga.query();
+
+while (ga.next()) {
+    gs.info(ga.assignment_group.getDisplayValue() +
+            ' : ' + ga.getAggregate('COUNT'));
+}
+
+
+// 3.  Write a Before Insert/Update Business Rule to automatically set the Assignment Group based on the selected Configuration Item's support group, but only when Assignment Group is empty.
+
+if (current.assignment_group.nil() && !current.cmdb_ci.nil()) {
+
+    var ci = new GlideRecord('cmdb_ci');
+    if (ci.get(current.cmdb_ci)) {
+        if (!ci.support_group.nil()) {
+            current.assignment_group = ci.support_group;
+        }
+    }
+}
+
+
+//4. Create a Script Include function that accepts a caller sys_id and returns the caller's email and department.
+
+var CallerDetails = Class.create();
+CallerDetails.prototype = {
+    
+    getDetails: function(userSysId) {
+        var user = new GlideRecord('sys_user');
+
+        if (user.get(userSysId)) {
+            return {
+                email: user.email.toString(),
+                department: user.department.getDisplayValue()
+            };
+        }
+
+        return null;
+    },
+
+    type: 'CallerDetails'
+};
+
+
+//5. Write a script to find duplicate active Incidents having the same short description and caller, and print the duplicate Incident numbers.
+
+
+
+var ga = new GlideAggregate('incident');
+ga.addQuery('active', true);
+ga.addAggregate('COUNT');
+ga.groupBy('caller_id');
+ga.groupBy('short_description');
+ga.query();
+
+while (ga.next()) {
+
+    if (parseInt(ga.getAggregate('COUNT'), 10) > 1) {
+
+        var gr = new GlideRecord('incident');
+        gr.addQuery('active', true);
+        gr.addQuery('caller_id', ga.caller_id);
+        gr.addQuery('short_description', ga.short_description);
+        gr.query();
+
+        while (gr.next()) {
+            gs.info('Duplicate: ' + gr.number);
+        }
+    }
+}
+
