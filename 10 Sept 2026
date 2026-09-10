@@ -1,0 +1,86 @@
+// Q1. Write a background script to find all active users who belong to the IT department and print their name and email.
+
+var gr = new GlideRecord('sys_user');
+gr.addQuery('active', false);
+gr.query();
+
+while (gr.next()) {
+    gs.info(gr.name + ' | ' + gr.email);
+}
+
+// Q2. Write a Business Rule script to prevent an Incident from being closed if the Close notes field is empty.
+
+
+if (current.state == 7 && current.close_notes.nil()) {
+    gs.addErrorMessage('Close Notes is mandatory before closing the Incident.');
+    current.setAbortAction(true);
+}
+
+// Q3. Write a Client Script + Script Include using GlideAjax to get the caller's department and populate a field on the Incident form.
+function onChange(control, oldValue, newValue, isLoading) {
+    if (isLoading || !newValue) {
+        return;
+    }
+
+    var ga = new GlideAjax('CallerUtils');
+    ga.addParam('sysparm_name', 'getManager');
+    ga.addParam('sysparm_user', newValue);
+
+    ga.getXMLAnswer(function(answer) {
+        g_form.setValue('u_manager', answer);
+    });
+}
+
+
+var CallerUtils = Class.create();
+CallerUtils.prototype = Object.extendsObject(AbstractAjaxProcessor, {
+
+    getManager: function() {
+        var user = new GlideRecord('sys_user');
+
+        if (user.get(this.getParameter('sysparm_user'))) {
+            return user.manager.toString();
+        }
+
+        return '';
+    },
+
+    type: 'CallerUtils'
+});
+
+
+
+// Q4. Write a script to find the 5 assignment groups with the highest number of active Incidents using GlideAggregate.
+
+var ga = new GlideAggregate('incident');
+ga.addQuery('active', true);
+ga.addNotNullQuery('assignment_group');
+ga.addAggregate('COUNT');
+ga.groupBy('assignment_group');
+ga.query();
+
+while (ga.next()) {
+    gs.info(
+        ga.assignment_group.getDisplayValue() +
+        ' : ' +
+        ga.getAggregate('COUNT')
+    );
+}
+
+// Q5. Write a Business Rule to automatically create a Problem when an Incident with Priority 1 is closed. Avoid creating duplicate Problems for the same Incident.
+
+
+if (current.state == 7 && current.priority == 1) {
+
+    var problem = new GlideRecord('problem');
+    problem.addQuery('parent', current.sys_id);
+    problem.query();
+
+    if (!problem.next()) {
+        problem.initialize();
+        problem.short_description = 'Problem for ' + current.number;
+        problem.parent = current.sys_id;
+        problem.insert();
+    }
+}
+
