@@ -1,0 +1,41 @@
+1 . Business Rule – Prevent Incident Closure
+Write a Before Update Business Rule on the Incident table to prevent an incident from being closed if any related Change Request is in the New or Assess state.
+Display an error message when the condition is met.
+
+brfore business rule ( update )
+(function executeRule(current, previous) {
+
+    if (current.state.changesTo(7)) {
+
+        var gr = new GlideRecord('change_request');
+        gr.addQuery('state', 'IN', '-5,-4');
+        gr.query();
+
+        if (gr.hasNext()) {
+            gs.addErrorMessage(
+                'Cannot close the Incident because a Change Request is still in New or Assess state.'
+            );
+            current.setAbortAction(true);
+        }
+    }
+
+})(current, previous);
+
+//2 . GlideRecord – Auto-Assign Incident
+Write a server-side script using GlideRecord or GlideAggregate to find the user with the fewest active incidents in the same assignment group and automatically assign the new incident to that user.
+
+var ga = new GlideAggregate('incident');
+
+ga.addQuery('active', true);
+ga.addQuery('assignment_group', current.assignment_group);
+ga.addNotNullQuery('assigned_to');
+
+ga.addAggregate('COUNT');
+ga.groupBy('assigned_to');
+ga.orderByAggregate('COUNT');
+ga.setLimit(1);
+ga.query();
+
+if (ga.next()) {
+    current.assigned_to = ga.getValue('assigned_to');
+}
